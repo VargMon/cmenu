@@ -1,0 +1,51 @@
+This is Color Menu v0.2, a bash shell script based menu that relies on dialog 
+v0.4 for menuing.
+
+This is released as per the GPL, available from prep.ai.mit.edu, if shell 
+scripts need to be copywrited anyway. 8-)
+
+I originally wrote this for DOS users who didn't want to learn UNIX commands
+but still wanted to use the Linux box for internet connections. I have added
+some other things to make their stay easier too. 
+
+This is my first real adventure into shell scripts, so if you find problems
+or have suggestions, LET ME KNOW...
+
+Variables:
+SHLACT1 SHLACT2 : personal shell accounts  i.e. crh0027.urh.uiuc.edu
+DOSDRV1 DOSDRV2 : DOS drives and/or directories i.e. /dose, /dosc/zip
+FRIEND: Someone who you like to check on. i.e. whirlin@crh0027.urh.uiuc.edu
+Because I don't know any better, these are environment variables set in 
+the users .profile, for system installations, or at the top of the file.
+
+Required programs:
+dialog v0.4 - It will not work with the older dialog that comes with Slackware
+2.0. I do not know about the newer Slackware. If you get errors, your dialog 
+is too old. It is available from sunsite.unc.edu as:
+/pub/Linux/utils/shell/dialog-0.4-tar.gz
+
+ncftp - I tested this with ncftp 1.7.5 with a full-fledged .netrc. I do not 
+think that the Go For File choice will work without it. 
+
+Local Programs - If you don't have the programs in the local programs menu 
+installed, they won't work |-P
+
+Things to edit:
+In netfun(), you might need to change the commands to open and close the 
+network connection. 
+in basefun(), you might want to change the choices in the ftp menu.
+in webfun(), you should change the Archie server to one near you.
+
+Although this script works well, it really wasn't intended for Linuxoids, but 
+rather for Linuxoids to set up for their users. 
+  
+Thanks to Savio Lam (lam836@cs.cuhk.hk) and Stuart Herbert 
+(S.Herbert@Sheffield.ac.uk) for dialog. And Pat Volkerding of Slackware fame,
+whose installation script is what gave me the idea to make this. And, of 
+course, Linus Torvalds for the OS that makes this possible.....
+
+As always, comments and suggestions are welcome. 
+
+Whirlin' Dervish
+Whirlin on IRC at #linux and #Linpeople.
+

@@ -1,0 +1,643 @@
+#!/bin/bash
+
+###############################################################################
+#
+# This is Color Menu, a dialog based shell script to help amateur users use
+# the UNIX system.
+#
+###############################################################################
+#
+# This first section is for defining variables if this is going to be installed
+# in a users home directory. If this is to be installed in a system directory
+# these should be set in the users environment.
+#
+# Uncomment these lines and put in the apppropriate statements to use this from
+# a home directory. i.e. $HOME/bin BTW, make sure that $HOME/bin is in your
+# path 8-)
+#
+# SHLACT1=                     # Change to the machine where you have a shell
+# SHLACT2=                     # account. SHLACT2 is for a 2nd account
+# DOSDRV1=		       # Change this to any directory that you would
+# DOSDRV2=                     # like to have in the menu
+# FRIEND1=
+# FRIEND2=		       # Someone you would like to finger
+#
+###############################################################################	
+
+version="Color Menu v0.4"
+netfun()
+{
+while [ 0 ]; do
+	dialog --title "Net Connection" \
+        --backtitle "`date`  $version  `pwd`" \
+	--menu "Start or Stop SLIP Connection" 11 70 4 \
+        "1" "Open Network Connection" \
+        "2" "Close Network Connection" \
+	"3" "Return to Network Menu" \
+        "4" "Return to Main Menu" 2> /tmp/tmpchoice
+        if [ $? = 1 -o $? = 255 ]; then
+                rm -f /tmp/tmpmsg /tmp/tmpchoice
+                exit
+        fi
+        openchoice="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        if [ "$openchoice" = "1" ]; then
+        dip $HOME/bradley.dip	# Change this to reflect your setup
+        fi
+        if [ "$openchoice" = "2" ]; then
+        kill -9 `ps | awk ' /dip/ && !/awk/ {print $1}'` 
+	#^^^ Change this to refelct your setup^^^
+        fi
+	if [ "$openchoice" = "3" ]; then
+	basefun
+	fi
+        if [ "$openchoice" = "4" ]; then
+        main
+        fi
+done
+}
+
+webfun()
+{
+while [ 0 ]; do
+dialog \
+	--backtitle "`date`  $version  `pwd`" \
+	--menu "Lynx, Gopher, and similar clients" 11 70 4 \
+        "1" "Lynx" \
+        "2" "Gopher" \
+	"3" "Return to Network Menu" \
+        "4" "Return to Main Menu" 2> /tmp/tmpchoice
+                if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                fi
+        wwwchoice="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        if [ "$wwwchoice" = "1" ]; then
+        dialog \
+	--inputbox "Site?" 8 50 2> /tmp/tmpchoice
+        site="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        lynx ftp://$site
+        fi
+        if [ "$wwwchoice" = "2" ]; then
+        dialog \
+	--inputbox "Site?" 8 50 2> /tmp/tmpchoice
+        site="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        gopher $site
+        fi
+	if [ "$wwwchoice" = "3" ]; then
+        basefun
+        fi
+        if [ "$wwwchoice" = "4" ]; then
+        main
+        fi
+done
+}
+
+localprog()
+{
+while [ 0 ]; do
+dialog --title "Program Menu" \
+		--backtitle "`date`  $version  `pwd`" \
+                --menu  "Local Programs" 13 70 6 \
+                "1" "File Manager" \
+                "2" "Text Editor" \
+                "3" "GIF Viewer" \
+                "4" "SplitVT" \
+                "5" "Process Killer" \
+                "6" "Return to Local Menu" 2> /tmp/tmpchoice
+                        if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                        fi
+                progchoice="`cat /tmp/tmpchoice`"
+                rm -f /tmp/tmpchoice
+                if [ "$progchoice" = "1" ]; then
+                uit
+                fi
+                if [ "$progchoice" = "2" ]; then
+                joe
+                fi
+                if [ "$progchoice" = "3" ]; then
+                zgv
+                fi
+                if [ "$progchoice" = "4" ]; then
+                splitvt -upper bash -lower bash
+                fi
+                if [ "$progchoice" = "5" ]; then
+                uitps
+                fi
+                if [ "$progchoice" = "6" ]; then
+                localfun
+                fi
+done        
+}
+
+localdir()
+{
+while [ 0 ]; do
+dialog --title "Directory Manipulation" \
+		--backtitle "`date`  $version  `pwd`" \
+                --menu "Change and view Directories" 14 70 7 \
+                "1" "View Current Directory" \
+                "2" "View Directory Contents" \
+                "3" "Change Directory to $DOSDRV1" \
+                "4" "Change Directory to $DOSDRV2" \
+                "5" "Check Diskspace Statistics" \
+                "6" "Change Directory to $HOME" \
+                "7" "Return to Local Menu" 2> /tmp/tmpchoice
+                if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                        fi
+                dirchoice="`cat /tmp/tmpchoice`"
+                rm -f /tmp/tmpchoice
+                if [ "$dirchoice" = "1" ]; then
+                pwd > /tmp/tmpmsg
+                dialog \
+		--backtitle "`date`  $version  `pwd`" \
+                --title "Current Working Directory" \
+                --textbox /tmp/tmpmsg 5 70
+                rm -f /tmp/tmpmsg
+                fi
+                if [ "$dirchoice" = "2" ]; then
+                ls -l >/tmp/tmpmsg
+                dialog \
+		--backtitle "`date`  $version  `pwd`" \
+                --title "Contents of Current Directory" \
+                --textbox /tmp/tmpmsg 40 70
+                rm -f /tmp/tmpmsg
+                fi
+                if [ "$dirchoice" = "3" ]; then
+                cd $DOSDRV1
+                fi
+                if [ "$dirchoice" = "4" ]; then
+                cd $DOSDRV2
+                fi
+                if [ "$dirchoice" = "5" ]; then
+                df >/tmp/tmpmsg
+                dialog \
+                --title "Diskspace Statistics" \
+                --textbox /tmp/tmpmsg 12 76
+                rm -f /tmp/tmpmsg
+                fi
+                if [ "$dirchoice" = "6" ]; then
+                cd
+                fi
+		if [ "$dirchoice" = "7" ]; then
+		localfun
+		fi
+done
+}
+
+sysmon()
+{
+while [ 0 ]; do
+	dialog \
+	--backtitle "`date`  $version  `pwd`" \
+	--title "System Monitors" \
+	--menu "Check System Statistics" 15 70 8 \
+	"1" "Free Memory" \
+	"2" "Who is Logged In" \
+	"3" "Netstats" \
+	"4" "Continuous Netstat Listing" \
+	"5" "Top" \
+	"6" "Diskspace Statistics" \
+	"7" "Return to Local Services Menu" \
+	"8" "Return to Main Menu" 2>/tmp/tmpchoice
+		if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                fi
+	syschoice="`cat /tmp/tmpchoice`"
+	rm -f /tmp/tmpchoice
+	if [ "$syschoice" = "1" ]; then
+		free >/tmp/tmpmsg
+                dialog \
+                --title "Free Memory" \
+                --textbox /tmp/tmpmsg 8 76
+                rm -f /tmp/tmpmsg
+        fi
+	if [ "$syschoice" = "2" ]; then
+		w >/tmp/tmpmsg
+                dialog \
+                --title "Who is Logged In" \
+                --textbox /tmp/tmpmsg 40 76
+                rm -f /tmp/tmpmsg
+        fi
+	if [ "$syschoice" = "3" ]; then
+		netstat >/tmp/tmpmsg
+                dialog \
+                --title "Netstats" \
+                --textbox /tmp/tmpmsg 35 76
+                rm -f /tmp/tmpmsg
+        fi
+	if [ "$syschoice" = "4" ]; then
+		netstat -c
+	fi
+	if [ "$syschoice" = "5" ]; then
+		top
+	fi
+	if [ "$syschoice" = "6" ]; then
+		df >/tmp/tmpmsg
+                dialog \
+                --title "Diskspace Statistics" \
+                --textbox /tmp/tmpmsg 12 76
+                rm -f /tmp/tmpmsg
+        fi
+	if [ "$syschoice" = "7" ]; then
+		localfun
+	fi
+	if [ "$syschoice" = "8" ]; then
+	main
+	fi
+done
+}
+
+
+	
+localfun()
+{
+while [ 0 ]; do
+	dialog --title "Local Services" \
+	--backtitle "`date`  $version  `pwd`" \
+	--menu "Things not requiring a Connection" 12 70 5 \
+        "1" "Program Menu" \
+        "2" "Directory Manipulation" \
+	"3" "System Monitors" \
+        "4" "Search File Lists" \
+        "5" "Return to Main Menu" 2> /tmp/tmpchoice
+                if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                fi
+        locchoice="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        if [ "$locchoice" = "1" ]; then
+        localprog
+	fi
+	if [ "$locchoice" = "2" ]; then
+        localdir
+        fi
+	if [ "$locchoice" = "3" ]; then
+	sysmon
+	fi
+        if [ "$locchoice" = "4" ]; then
+        dialog \
+	--backtitle "`date`  $version  `pwd`" \
+	--inputbox "String to search for?" 8 50 2> /tmp/tmpchoice
+        string="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        grep $string /usr/local/lib/lists/* > grep.txt
+        dialog \
+	--title "File Search Results" \
+        --yesno "View Results?" 6 50
+        	if [ $? = 0 ]; then
+        	dialog \
+		--title "File Search Results" \
+        	--textbox "grep.txt" 45 70
+        	fi
+	fi
+	if [ "$locchoice" = "5" ]; then
+	main
+	fi
+done
+}
+
+ftpfun()
+{
+###############################################################################
+#
+# You may want to change these to your favorite sites and/or sites near you :)
+#
+###############################################################################
+while [ 0 ]; do
+dialog --title "FTP" \
+	--backtitle "`date`  $version  `pwd`" \
+        --menu "Pick a Site" 17 70 10 \
+        "1" "ftp.cdrom.com" \
+        "2" "garbo.vaasa.fi" \
+        "3" "OAK.Oakland.edu" \
+        "4" "wuarchive.wustl.edu" \
+        "5" "aurora.intel.com" \
+        "6" "ftp.microsoft.com" \
+        "7" "crh0027.urh.uiuc.edu" \
+        "8" "FTP elsewhere" \
+        "9" "Go for Files" \
+        "10" "Return to Basic Services Menu" 2> /tmp/tmpchoice
+                if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                fi
+        ftpchoice="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        if [ "$ftpchoice" = "1" ]; then
+        ftp ftp.cdrom.com
+        fi
+        if [ "$ftpchoice" = "2" ]; then
+        ftp garbo.vaasa.fi
+        fi
+        if [ "$ftpchoice" = "3" ]; then
+        ftp OAK.Oakland.edu
+        fi
+        if [ "$ftpchoice" = "4" ]; then
+        ftp wuarchive.wustl.edu
+        fi
+        if [ "$ftpchoice" = "5" ]; then
+        ftp aurora.intel.com
+        fi
+        if [ "$ftpchoice" = "6" ]; then
+        ftp ftp.microsoft.com
+        fi
+        if [ "$ftpchoice" = "7" ]; then
+        ftp crh0027.urh.uiuc.edu
+        fi
+        if [ "$ftpchoice" = "8" ]; then
+        dialog \
+        --inputbox "Site to FTP?" 8 50 2> /tmp/tmpchoice
+        site="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        ftp "$site"
+        fi
+        if [ "$ftpchoice" = "9" ]; then
+        dialog \
+	--inputbox "Enter like this: \nftp.ftp.org:/pub/files/README" \
+         10 50 2> /tmp/tmpchoice
+        filesite="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        ftp "$filesite"
+        fi
+        if [ "$ftpchoice" = "10" ]; then
+        basefun
+        fi
+done        
+}
+
+mailfun()
+{
+while [ 0 ]; do
+	dialog \
+	--backtitle "`date`  $version  `pwd`" \
+	--title "Mail Menu" \
+	--menu "Choose your Mailer" 11 70 4 \
+	"1" "Pine" \
+	"2" "Elm" \
+	"3" "Return to Basic Services Menu" \
+	"4" "Return to Main Menu" 2>/tmp/tmpchoice
+	mailchoice="`cat /tmp/tmpchoice`"
+	rm -f /tmp/tmpchoice
+	if [ "$mailchoice" = "1" ]; then
+	pine
+	fi
+	if [ "$mailchoice" = "2" ]; then
+	elm
+	fi
+	if [ "$mailchoice" = "3" ]; then
+	basefun
+	fi
+	if [ "$mailchoice" = "4" ]; then
+	main
+	fi
+done
+}
+
+telfun()
+{
+while [ 0 ]; do
+       dialog \
+        --backtitle "`date`  $version  `pwd`" \
+	--title "Telnet Menu" \
+        --menu "Start a Remote Login" 12 70 5 \
+        "1" "Telnet to $SHLACT1" \
+        "2" "Telnet to $SHLACT2" \
+	"3" "Telnet Elsewhere" \
+	"4" "Return to Network Menu" \
+	"5" "Return to Main Menu" 2>/tmp/tmpchoice
+	netchoice="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+		if [ $? = 1 -o $? = 255 ]; then
+         	rm -f /tmp/tmpmsg /tmp/tmpchoice
+         	exit
+         	fi
+	if [ "$netchoice" = "1" ]; then
+        telnet $SHLACT1
+        fi
+        if [ "$netchoice" = "2" ]; then
+        telnet $SHLACT2
+        fi
+	if [ "$netchoice" = "3" ]; then
+        dialog \
+        --inputbox "Site to Telnet?" 8 50 2> /tmp/tmpchoice
+        site="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        telnet "$site"
+        fi
+	if [ "$netchoice" = "4" ]; then
+        basefun
+        fi
+        if [ "$netchoice" = "5" ]; then
+        main
+	fi
+done
+}
+
+basefun()
+{
+while [ 0 ]; do
+       dialog \
+	--backtitle "`date`  $version  `pwd`" \
+	--menu "Basic Network Services" 18 70 11 \
+        "1" "Telnet" \
+        "2" "Read NetNews" \
+        "3" "IRC Chat" \
+        "4" "Mail" \
+        "5" "Archie File Search" \
+        "6" "FTP" \
+        "7" "Finger" \
+        "8" "Name Server Lookup" \
+	"9" "World Wide Web" \
+	"10" "Open and Close Network Connection" \
+        "11" "Return to Main Menu" 2> /tmp/tmpchoice
+        netchoice="`cat /tmp/tmpchoice`"
+	rm -f /tmp/tmpchoice
+		if [ $? = 1 -o $? = 255 ]; then
+                        rm -f /tmp/tmpchoice
+                        exit
+                fi
+        if [ "$netchoice" = "1" ]; then
+        telfun
+        fi
+	if [ "$netchoice" = "2" ]; then
+        tin -r
+        fi
+        if [ "$netchoice" = "3" ]; then
+        irc
+        fi
+        if [ "$netchoice" = "4" ]; then
+        mailfun
+        fi
+        if [ "$netchoice" = "5" ]; then
+        archiefun
+	fi
+        if [ "$netchoice" = "6" ]; then
+	ftpfun
+        fi
+        if [ "$netchoice" = "7" ]; then
+        netfinger
+	fi
+        if [ "$netchoice" = "8" ]; then
+        dialog \
+	--inputbox "Enter Name or IP number" 8 50 2> /tmp/tmpchoice 
+        site="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        nslookup $site >/tmp/tmpmsg
+        dialog \
+	--title "nslookup Results for $site" \
+        --textbox /tmp/tmpmsg 10 40
+        rm -f /tmp/tmpmsg
+        fi
+	if [ "$netchoice" = "9" ]; then
+	webfun
+	fi
+	if [ "$netchoice" = "10" ]; then
+	netfun
+	fi
+        if [ "$netchoice" = "11" ]; then
+        main
+	fi
+done  
+}
+
+archiefun()
+{
+while [ 0 ]; do
+dialog \
+--title "Archie" \
+--backtitle "`date`  $version  `pwd`" \
+--menu "Find a file with Archie" 11 70 4 \
+"1" "Archie Search" \
+"2" "Archie via Telnet" \
+"3" "Return to Basic Services Menu" \
+"4" "Return to Main Menu" 2> /tmp/tmpchoice
+	 if [ $? = 1 -o $? = 255 ]; then
+         rm -f /tmp/tmpmsg /tmp/tmpchoice
+         exit
+	 fi
+echo "`cat /tmp/tmpchoice`"
+archchoice="`cat /tmp/tmpchoice`"
+rm -f /tmp/tmpchoice
+if [ "$archchoice" = "1" ]; then
+	dialog --title "Archie Search" \
+        --inputbox "String to search for?" 8 50 2> /tmp/tmpchoice
+        string="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+        archie -s "$string" -o grep.txt
+        dialog --yesno "View Results?" 6 50
+        if [ $? = 0 ]; then
+        dialog \
+        --title "Archie Search Results" \
+        --textbox "grep.txt" 45 70
+        fi
+fi
+if [ "$archchoice" = "2" ]; then
+	telnet archie.unl.edu
+fi
+if [ "$archchoice" = "3" ]; then
+	basefun
+fi
+if [ "$archchoice" = "4" ]; then
+	main
+fi
+done
+}        
+netfinger()
+{
+while [ 0 ]; do
+dialog \
+--title "Finger" \
+--backtitle "`date`  $version  `pwd`" \
+--menu "Find out about someone" 14 70 7 \
+"1" "$FRIEND1" \
+"2" "$FRIEND2" \
+"3" "$SHLACT1" \
+"4" "$SHLACT2" \
+"5" "Finger Someone Else" \
+"6" "Return to Basic Services Menu" \
+"7" "Return to Main Menu" 2> /tmp/tmpchoice
+if [ $? = 1 -o $? = 255 ]; then
+         rm -f /tmp/tmpmsg /tmp/tmpchoice
+         exit
+fi
+fingerchoice="`cat /tmp/tmpchoice`"
+rm -f /tmp/tmpchoice
+if [ "$fingerchoice" = "1" ]; then 
+	finger $FRIEND1 > /tmp/tmpmsg
+	dialog \
+	--textbox /tmp/tmpmsg 45 79 
+        rm -f /tmp/tmpmsg
+        fi
+if [ "$fingerchoice" = "2" ]; then
+	finger $FRIEND2 > /tmp/tmpmsg
+	dialog \
+	--textbox /tmp/tmpmsg 45 79
+        rm -f /tmp/tmpmsg
+        fi
+if [ "$fingerchoice" = "3" ]; then
+	finger "@$SHLACT1" > /tmp/tmpmsg
+	dialog \
+	--textbox /tmp/tmpmsg 45 79
+        rm -f /tmp/tmpmsg
+        fi
+if [ "$fingerchoice" = "4" ]; then
+	finger "@$SHLACT2" > /tmp/tmpmsg
+	dialog \
+	--textbox /tmp/tmpmsg 45 79
+        rm -f /tmp/tmpmsg
+        fi
+if [ "$fingerchoice" = "5" ]; then
+	dialog \
+        --inputbox "Who?" 8 50 2> /tmp/tmpchoice
+        who="`cat /tmp/tmpchoice`"
+        rm -f /tmp/tmpchoice
+	finger "$who" > /tmp/tmpmsg
+	dialog \
+	--textbox /tmp/tmpmsg 45 79
+        rm -f /tmp/tmpmsg
+        fi
+if [ "$fingerchoice" = "6" ]; then
+basefun
+fi
+if [ "$fingerchoice" = "7" ]; then
+main
+fi
+done
+}
+main()
+{ 
+while [ 0 ]; do
+dialog --title "Main Menu" \
+--backtitle "`date`  $version  `pwd`" \
+--menu "Welcome to Color Menu 0.4" 10 70 3 \
+"1" "Network Services" \
+"2" "Local Services" \
+"3" "Quit" 2> /tmp/tmpchoice
+if [ $? = 1 -o $? = 255 ]; then
+         rm -f /tmp/tmpmsg /tmp/tmpchoice
+         exit
+fi
+mainchoice="`cat /tmp/tmpchoice`"
+rm -f /tmp/tmpchoice /tmp/tmpmsg
+if [ "$mainchoice" = "1" ]; then
+	basefun
+fi
+if [ "$mainchoice" = "2" ]; then
+	localfun	         
+fi
+if [ "$mainchoice" = "3" ]; then
+	exit
+fi
+done 
+}
+main
