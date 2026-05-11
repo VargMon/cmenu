@@ -462,6 +462,9 @@ typedef struct _cursive_event_s cursive_event_t;
 /* Mark a parameter as intentionally unused */
 #define UNUSED(x) (void)(x)
 
+/* Event breadcast */
+#define CURSIVE_EVENT_BROADCAST	((cursive_window_t*)"ALL_CURSIVE_WINDOWS")
+
 /* ============================================================================
  * Internal Helper Function Declarations
  * ============================================================================
@@ -471,6 +474,7 @@ static void enable_echo(void);
 static void configure_curses(void);
 static void configure_termios(void);
 static void initialize_screens(CURSIVE *ctx, int height, int width);
+static int32_t readEscapeSequence(void);
 
 /* ============================================================================
  * Internal Helper Implementations
@@ -1507,6 +1511,10 @@ void cursive_window_set_visible(cursive_window_t *cursive_window, bool enable) {
     set_window_flag(cursive_window, STATE_VISIBLE, enable);
 }
 
+void cursive_window_hide(cursive_window_t *cursive_window) {
+    set_window_flag(cursive_window, STATE_VISIBLE, FALSE);
+}
+
 void cursive_window_set_resizable(cursive_window_t *cursive_window, bool resizable) {
     if (!cursive_window) return;
     set_window_flag(cursive_window, STATE_NORESIZE, !resizable);
@@ -1826,6 +1834,10 @@ int cursive_event_default_TERM_RESIZE(cursive_window_t *window, void *arg) {
         cursive_wresize(window, window->min_width, window->min_height);
     cursive_screen_redraw(window->ctx->screen_id, REDRAW_ALL);
     (void)arg; return 0;
+}
+
+int cursive_event_run(cursive_window_t *window, char *event_name) {
+    return cursive_event_exec(window, event_name, NULL);
 }
 
 /* ============================================================================
