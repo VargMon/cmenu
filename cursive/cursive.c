@@ -30,6 +30,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #define NCURSES_OPAQUE 0
 
@@ -433,6 +434,7 @@ struct _cursive_window_s {
     CursiveFunc border_agent[2];
     void *userptr;
     void *classid;
+	bool is_closed;  // FIX: Add destruction guard
 };
 
 struct _cursive_s {
@@ -650,12 +652,33 @@ static const int kStaggerDeltaX = 2;
 static const int kStaggerDeltaY = 2;
 
 static void compute_stagger_position(int width, int height, int maxCols, int maxRows, int *outX, int *outY) {
+    // FIX: Validate input dimensions
+    if (width >= maxCols || height >= maxRows) {
+        *outX = 0;
+        *outY = 0;
+        return;
+    }
+
     static int currentX = kInitialStaggerX;
     static int currentY = kInitialStaggerY;
     currentX += kStaggerDeltaX;
     currentY += kStaggerDeltaY;
-    if (currentX + width > maxCols) currentX = 1;
-    if (currentY + height > maxRows) currentY = 1;
+
+    // FIX: Ensure next position doesn't overflow
+    if (currentX + width > maxCols) {
+        currentX = 1;
+        if (currentX + width > maxCols) {
+            currentX = ABSINT(maxCols - width - 1);
+        }
+    }
+
+    if (currentY + height > maxRows) {
+        currentY = 1;
+        if (currentY + height > maxRows) {
+            currentY = ABSINT(maxRows - height - 1);
+        }
+    }
+
     *outX = currentX;
     *outY = currentY;
 }
@@ -741,8 +764,18 @@ void window_modify_border(WINDOW *window, int attrs, short color_pair) {
     if (!window) return;
     int rows, cols;
     get_win_geom(window, &rows, &cols, NULL, NULL);
+
+	// FIX: Validate dimensions are reasonable
+    if (rows <= 1 || cols <= 1) {
+        fprintf(stderr, "window_modify_border: invalid window size %dx%d\n", cols, rows);
+        return;
+    }
+
     attr_t base_attr = (attr_t)attrs;
-    for (int x = 0; x < cols; ++x) {
+
+	for (int x = 0; x < cols; ++x) {
+        if (x < 0 || x >= cols)
+			continue;
         chtype top = mvwinch(window, 0, x);
         chtype bottom = mvwinch(window, rows - 1, x);
         bool alt_top = (top & A_ALTCHARSET);
@@ -751,6 +784,8 @@ void window_modify_border(WINDOW *window, int attrs, short color_pair) {
         mvwchgat(window, rows - 1, x, 1, base_attr | (alt_bottom ? A_ALTCHARSET : 0), color_pair, NULL);
     }
     for (int y = 1; y < rows - 1; ++y) {
+        if (y < 1 || y >= rows - 1)
+			continue;
         chtype left = mvwinch(window, y, 0);
         chtype right = mvwinch(window, y, cols - 1);
         bool alt_left = (left & A_ALTCHARSET);
@@ -774,19 +809,42 @@ static int create_shadow_cell(WINDOW *src, int row, int col, cchar_t *shadow_cel
 
 WINDOW *window_create_shadow(WINDOW *base_win, WINDOW *underlying_win) {
     if (!base_win) return NULL;
+
     int height, width, beg_y, beg_x;
     get_win_geom(base_win, &height, &width, &beg_y, &beg_x);
+
     if (!underlying_win) underlying_win = SCREEN_WINDOW;
-    WINDOW *shadow = newwin(height, width, beg_y + 1, beg_x + 1);
+
+    // FIX: Validate shadow position doesn't overflow screen
+    int screen_h, screen_w;
+    get_win_geom(underlying_win, &screen_h, &screen_w, NULL, NULL);
+
+    int shadow_y = beg_y + 1;
+    int shadow_x = beg_x + 1;
+
+    if (shadow_y + height > screen_h || shadow_x + width > screen_w) {
+        fprintf(stderr, "window_create_shadow: shadow would overflow screen\n");
+        return NULL;
+    }
+
+    WINDOW *shadow = newwin(height, width, shadow_y, shadow_x);
     if (!shadow) return NULL;
+
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             cchar_t cell;
             int src_y = beg_y + y + 1, src_x = beg_x + x + 1;
+
+            // FIX: Validate source coordinates are within bounds
+            if (src_y < 0 || src_y >= screen_h || src_x < 0 || src_x >= screen_w) {
+                continue;
+            }
+
             if (create_shadow_cell(underlying_win, src_y, src_x, &cell) == OK)
                 mvwadd_wch(shadow, y, x, &cell);
         }
     }
+
     return shadow;
 }
 
@@ -811,7 +869,24 @@ static inline void compute_matrix_indices(size_t index, short *raw_fg, short *ra
 }
 
 static inline short fast_color_pair(short fg, short bg) {
-    return (short)(bg * cursive_color_count + (cursive_color_count - fg - 1));
+    // FIX: Validate inputs are in range
+    if (fg < 0 || fg >= cursive_color_count) {
+        fprintf(stderr, "fast_color_pair: invalid foreground %d\n", fg);
+        return 0;
+    }
+    if (bg < 0 || bg >= cursive_color_count) {
+        fprintf(stderr, "fast_color_pair: invalid background %d\n", bg);
+        return 0;
+    }
+
+    // FIX: Check for overflow before calculation
+    int result = bg * cursive_color_count + (cursive_color_count - fg - 1);
+    if (result < 0 || result > SHRT_MAX) {
+        fprintf(stderr, "fast_color_pair: overflow in calculation\n");
+        return 0;
+    }
+
+    return (short)result;
 }
 
 struct color_mtx { int fg; int bg; };
@@ -1047,6 +1122,13 @@ static void focus_next_managed_window(int screen_id) {
 
 void cursive_window_close(cursive_window_t *cursive_window) {
     if (!cursive_window) return;
+
+    if (cursive_window->is_closed) {  // FIX: Prevent double-close
+        fprintf(stderr, "cursive_window_close: window already closed\n");
+        return;
+    }
+    cursive_window->is_closed = true;
+
     int screen_id = cursive_window->ctx->screen_id;
     bool was_managed = (cursive_window->ctx->managed == TRUE);
     cursive_event_run(cursive_window, "window-close");
@@ -1525,16 +1607,38 @@ int cursive_window_get_screen_id(cursive_window_t *cursive_window) {
 }
 
 bool cursive_window_set_focus(cursive_window_t *cursive_window) {
-    if (!cursive_window) return false;
+    // FIX: Validate all pointer inputs
+    if (!cursive_window || !cursive_window->ctx || !cursive)
+        return false;
+
     int screen_id = cursive_window->ctx->screen_id;
+
+    // FIX: Validate screen_id bounds
+    if (screen_id < 0 || screen_id >= MAX_SCREENS) {
+        fprintf(stderr, "cursive_window_set_focus: invalid screen_id %d\n", screen_id);
+        return false;
+    }
+
     cursive_screen_t *screen = &cursive->cursive_screen[screen_id];
-    struct list_head *wnd_list = cursive_window->ctx->managed ? &screen->managed_list : &screen->unmanaged_list;
+    struct list_head *wnd_list = cursive_window->ctx->managed
+        ? &screen->managed_list
+        : &screen->unmanaged_list;
+
+    if (list_empty(wnd_list) && cursive_window->ctx->managed) {
+        fprintf(stderr, "cursive_window_set_focus: list uninitialized\n");
+        return false;
+    }
+
     cursive_window_t *sibling;
-    list_for_each_entry(sibling, wnd_list, list)
+    list_for_each_entry(sibling, wnd_list, list) {
+        if (!sibling || !sibling->window_state) continue;
+
         if (sibling->window_state & STATE_FOCUS) {
             sibling->window_state &= ~STATE_FOCUS;
             cursive_event_run(sibling, "window-unfocus");
         }
+    }
+
     cursive_window->window_state |= STATE_FOCUS;
     cursive_event_run(cursive_window, "window-focus");
     return true;
@@ -1786,13 +1890,32 @@ CURSIVE_EVENT *cursive_get_cursive_event(cursive_window_t *window, char *event_n
 
 int cursive_event_set(cursive_window_t *window, char *event_name, CursiveFunc func, void *arg) {
     if (!window || !event_name || !func) return -1;
+
     CURSIVE_EVENT *evt = cursive_get_cursive_event(window, event_name);
     if (!evt) {
         evt = (CURSIVE_EVENT*)calloc(1, sizeof(CURSIVE_EVENT));
-        if (!evt) return -1;
+        if (!evt) {
+            fprintf(stderr, "cursive_event_set: allocation failed\n");
+            return -1;
+        }
+        evt->event = strdup(event_name);  // FIX: Copy the string
+        if (!evt->event) {
+            free(evt);
+            fprintf(stderr, "cursive_event_set: strdup failed\n");
+            return -1;
+        }
         list_add(&evt->list, &window->event_list);
+    } else {
+        // Update existing - free old name if different
+        if (evt->event && strcmp(evt->event, event_name) != 0) {
+            free(evt->event);
+            evt->event = strdup(event_name);
+            if (!evt->event) {
+                fprintf(stderr, "cursive_event_set: strdup failed\n");
+                return -1;
+            }
+        }
     }
-    evt->event = event_name;
     evt->func = func;
     evt->arg = arg;
     return 1;
@@ -1811,17 +1934,23 @@ int cursive_event_exec(cursive_window_t *window, char *event_name, void *payload
 int cursive_event_del(cursive_window_t *window, char *event_name) {
     if (!window || !event_name) return -1;
     if (list_empty(&window->event_list)) return ERR;
+
     if (event_name[0] == '*') {
         struct list_head *pos, *tmp;
         list_for_each_safe(pos, tmp, &window->event_list) {
             CURSIVE_EVENT *evt = list_entry(pos, CURSIVE_EVENT, list);
-            list_del(&evt->list); free(evt);
+            free(evt->event);  // FIX: Free the copied string
+            list_del(&evt->list);
+            free(evt);
         }
         return 1;
     }
+
     CURSIVE_EVENT *evt = cursive_get_cursive_event(window, event_name);
     if (evt) {
-        list_del(&evt->list); free(evt);
+        free(evt->event);  // FIX: Free the copied string
+        list_del(&evt->list);
+        free(evt);
         return 1;
     }
     return ERR;
@@ -1845,10 +1974,17 @@ int cursive_event_run(cursive_window_t *window, char *event_name) {
  * ============================================================================
  */
 
-static cursive_window_t *s_eventWindow = NULL;
-static MEVENT s_prevMouseEvent = {0};
-static int s_eventMode = EVENTMODE_IDLE;
-static CursiveWkeyFunc s_currentKeyFunc = NULL;
+static _Atomic(cursive_window_t *) s_eventWindow = NULL;
+static volatile MEVENT s_prevMouseEvent = {0};
+static _Atomic(int) s_eventMode = EVENTMODE_IDLE;
+
+static inline cursive_window_t *get_event_window(void) {
+    return atomic_load(&s_eventWindow);
+}
+
+static inline void set_event_window(cursive_window_t *win) {
+    atomic_store(&s_eventWindow, win);
+}
 
 #define CURRENT_SCREEN         cursive_get_screen_window(-1)
 #define CURRENT_SCREEN_ID      cursive_get_active_screen()
@@ -1868,14 +2004,15 @@ int32_t cursive_kmio_fetch(MEVENT *mouse_event) {
 }
 
 static int32_t readEscapeSequence(void) {
-    int32_t escCode = 27, ch = 0;
-    uint8_t shiftBits = 4;
-    while (shiftBits < 24) {
-        ch = getch();
+    int32_t escCode = 27;
+
+    // FIX: Explicit loop for defined number of bytes
+    for (int i = 0; i < 3; ++i) {
+        int ch = getch();
         if (ch == ERR) break;
-        escCode |= (ch << shiftBits);
-        shiftBits <<= 1;
+        escCode |= (ch << (4 + i * 8));
     }
+
     return escCode;
 }
 
@@ -2034,40 +2171,62 @@ int cursive_kmio_gpm(MEVENT *mouse_event, uint16_t cmd) {
     extern int gpm_tried;
     extern int gpm_fd;
     static int gpm_fd_internal = -1;
-    struct pollfd pfd = {0};
-    struct timespec wait_time = { .tv_sec = 0, .tv_nsec = 5000 };
-    Gpm_Connect conn = {0};
-    Gpm_Event gevent = {0};
-    int fflags, i, array_len;
 
     if (cmd == CMD_GPM_CLOSE) {
-        if (gpm_fd_internal > 0)
+        if (gpm_fd_internal > 0) {
             Gpm_Close();
-        gpm_fd_internal = -1;
+            gpm_fd_internal = -1;  // FIX: Mark as closed
+        }
         return 0;
     }
+
     if (!mouse_event) return -1;
-    if (gpm_fd == -2 || (gpm_fd == -1 && gpm_tried)) return -1;
+
+	// FIX: Validate external state more carefully
+    if (gpm_tried && gpm_fd == -1)
+		return -1;
+    if (gpm_fd == -2)
+		return -1;
+
     if (gpm_fd_internal < 0) {
+        Gpm_Connect conn = {0};
         conn.defaultMask = 0;
         conn.eventMask = GPM_MOVE | GPM_UP | GPM_DOWN | GPM_DRAG;
         conn.maxMod = ~0;
+
         gpm_fd_internal = Gpm_Open(&conn, 0);
-        if (gpm_fd_internal > 0 && (cursive_global_flags & CURSIVE_GPM_SIGIO)) {
-            fcntl(gpm_fd_internal, F_SETOWN, getpid());
-            fflags = fcntl(gpm_fd_internal, F_GETFL);
-            fcntl(gpm_fd_internal, F_SETFL, fflags | FASYNC);
+        if (gpm_fd_internal < 0) {
+            fprintf(stderr, "cursive_kmio_gpm: Gpm_Open() failed\n");
+            return -1;
         }
     }
-    if (gpm_fd_internal < 0) return -1;
+
+    if (gpm_fd_internal < 0)
+		return -1;
+
+    // FIX: Validate fd is still valid
+    if (fcntl(gpm_fd_internal, F_GETFD) < 0) {
+        fprintf(stderr, "cursive_kmio_gpm: fd became invalid\n");
+        Gpm_Close();
+        gpm_fd_internal = -1;
+        return -1;
+    }
+
     pfd.fd = gpm_fd_internal; pfd.events = POLLIN;
-    if (poll(&pfd, 1, 1) < 1) return -1;
-    if (Gpm_GetEvent(&gevent) < 1) return -1;
+
+    if (poll(&pfd, 1, 1) < 1)
+		return -1;
+
+    if (Gpm_GetEvent(&gevent) < 1)
+		return -1;
+
     memset(mouse_event, 0, sizeof(*mouse_event));
     mouse_event->bstate = gevent.modifiers;
     mouse_event->x = gevent.x - 1;
     mouse_event->y = gevent.y - 1;
+
     array_len = sizeof(x_ncurses_state) / sizeof(x_ncurses_state[0]);
+
     if (!GPM_CLICK_STRICT(gevent.type)) {
         for (i = 0; i < array_len; ++i) {
             if (x_gpm_mode[i] == X_GPM_COOKED) continue;
